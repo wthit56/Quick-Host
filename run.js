@@ -6,7 +6,7 @@ var args = process.argv;
 if (args.length < 3) { throw "Must specify folder."; }
 
 fs.exists(args[2], function (exists) {
-	if (!exists) { throw "Must specify existing folder."; }
+	if (!exists) { throw "Could not find " + args[2] + "."; }
 	else {
 		if (args.length === 4) {
 			var port = parseInt(args[3], 10);
@@ -46,7 +46,7 @@ function checkPortOpen(port, callback) {
 }
 
 function initHost(port) {
-	console.log("using port " + port);
+	console.log("Quick-Hosting \"" + args[2] + "\" using port " + port + "...");
 
 	var mime = {
 		".html": "text/html",
