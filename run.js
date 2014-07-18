@@ -46,7 +46,7 @@ function checkPortOpen(port, callback) {
 }
 
 function initHost(port) {
-	console.log("Quick-Hosting \"" + args[2] + "\" using port " + port + "...");
+	console.log("Quick-Hosting \"" + args[2] + "\" using port " + port + "... (CTRL+C or close to stop)");
 
 	var mime = {
 		".html": "text/html",
