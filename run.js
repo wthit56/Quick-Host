@@ -67,27 +67,46 @@ function initHost(port) {
 			filepath += "index.html";
 		}
 
-		fs.exists(filepath, function (exists) {
-			if (!exists) {
-				console.log("404 " + request.url + " : " + filepath);
-				response.writeHead(404, { "Content-Type": "text/html" });
-				response.write("<title>404</title><h1>404</h1>");
-				response.end();
-			}
-			else {
-				var ext = path.extname(filepath);
-				if (ext) { ext = mime[ext]; }
-
-				if (ext) {
-					response.writeHead(200, { "Content-Type": ext });
-				}
-				else {
-					response.writeHead(200);
-				}
-
-				fs.createReadStream(filepath).pipe(response);
-				console.log("200" + (ext ? " [" + ext + "] " : "") + request.url + " : " + filepath);
-			}
+		fs.exists(filepath, function (e) {
+			exists(request, response, filepath, e);
 		});
 	}).listen(port);
+	
+	function _404(request, response, filepath) {
+		console.log("404 " + request.url + " : " + filepath);
+		response.writeHead(404, { "Content-Type": "text/html" });
+		response.write("<title>404</title><h1>404</h1>");
+		response.end();		
+	}
+	function exists(request, response, filepath, exists) {
+		if (!exists) {
+			_404(request, response, filepath);
+		}
+		else {
+			fs.stat(filepath, function(error, s){
+				stat(request, response, filepath, error, s);
+			});
+		}
+	}
+	function stat(request, response, filepath, error, stats) {
+		if(stats.isFile()) {
+			var ext = path.extname(filepath);
+			if (ext && (ext in mime)) {
+				ext = mime[ext];
+				response.writeHead(200, { "Content-Type": ext });
+			}
+			else {
+				response.writeHead(200);
+			}
+
+			fs.createReadStream(filepath).pipe(response);
+			console.log("200 " + (ext ? "[" + ext + "] " : "") + request.url + " : " + filepath);
+		}
+		else if(stats.isDirectory()) {
+			filepath = path.join(filepath, "index.html");
+			fs.exists(filepath, function (e) {
+				exists(request, response, filepath, e);
+			});
+		}
+	}
 }
