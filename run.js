@@ -5,6 +5,8 @@ var fs = require("fs"),
 var args = process.argv;
 if (args.length < 3) { throw "Must specify folder."; }
 
+var CreateCallback = require("./CreateCallback.js");
+
 fs.exists(args[2], function (exists) {
 	if (!exists) { throw "Could not find " + args[2] + "."; }
 	else {
@@ -58,6 +60,69 @@ function initHost(port) {
 	};
 
 	var findPath = /[^?]*/;
+	
+	http.createServer(function(request, response) {
+		console.log(request.url);
+
+		var filepath = decodeURI(url.parse(request.url).pathname);
+		filepath = path.join(path.join(args[2], filepath));
+		if (filepath[filepath.length - 1] === "\\") {
+			filepath += "index.html";
+		}
+		
+		var callback = CreateCallback();
+		callback.filepath = filepath;
+		callback.request = request;
+		callback.response = response;
+		callback.onDispose = function(callback) {
+			delete callback.filepath;
+			delete callback.request;
+			delete callback.response;
+		};
+
+		fs.exists(filepath, callback.setAction(exists));
+	}).listen(port);
+	
+	function _404(callback) {
+		console.log("404 " + callback.request.url + " : " + callback.filepath);
+		callback.response.writeHead(404, { "Content-Type": "text/html" });
+		callback.response.write("<title>404</title><h1>404: File not found</h1>")
+		callback.response.end();
+		//callback.response.end();
+		
+		callback.dispose();
+	}
+
+	function exists(exists, callback) {
+		if (!exists) {
+			_404(callback);
+		}
+		else {
+			fs.stat(callback.filepath, callback.setAction(stat));
+		}
+	}
+
+	function stat(error, stats, callback) {
+		if(stats.isFile()) {
+			var ext = path.extname(callback.filepath);
+			if (ext && (ext in mime)) {
+				ext = mime[ext];
+				callback.response.writeHead(200, { "Content-Type": ext });
+			}
+			else {
+				callback.response.writeHead(200);
+			}
+
+			fs.createReadStream(callback.filepath).on("end", callback.dispose).pipe(callback.response);
+			console.log("200 " + (ext ? "[" + ext + "] " : "") + callback.request.url + " : " + callback.filepath);
+		}
+		else if(stats.isDirectory()) {
+			callback.filepath = path.join(callback.filepath, "index.html");
+			fs.exists(callback.filepath, callback.setAction(exists));
+		}
+	}
+
+	/*
 	http.createServer(function (request, response) {
 		console.log(request.url);
 
@@ -109,4 +174,5 @@ function initHost(port) {
 			});
 		}
 	}
+	*/
 }
