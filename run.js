@@ -117,8 +117,12 @@ function initHost(port) {
 			console.log("200 " + (ext ? "[" + ext + "] " : "") + callback.request.url + " : " + callback.filepath);
 		}
 		else if(stats.isDirectory()) {
-			callback.filepath = path.join(callback.filepath, "index.html");
-			fs.exists(callback.filepath, callback.setAction(exists));
+			console.log("301 premanent redirect to " + callback.request.url + "/");
+			callback.response.writeHead(301, {location:callback.request.url+"/"});
+			callback.response.end();
+			callback.dispose();
+			//callback.filepath = path.join(callback.filepath, "index.html");
+			//fs.exists(callback.filepath, callback.setAction(exists));
 		}
 	}
 
