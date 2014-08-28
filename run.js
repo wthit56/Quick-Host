@@ -5,7 +5,7 @@ var fs = require("fs"),
 var args = process.argv;
 if (args.length < 3) { throw "Must specify folder."; }
 
-var CreateCallback = require("./CreateCallback.js");
+var CreateCallback = require("create-callback");
 
 fs.exists(args[2], function (exists) {
 	if (!exists) { throw "Could not find " + args[2] + "."; }
@@ -56,7 +56,8 @@ function initHost(port) {
 		".jpg": "image/jpeg",
 		".png": "image/png",
 		".js": "text/javascript",
-		".css": "text/css"
+		".css": "text/css",
+		".mp3": "audio/mpeg"
 	};
 
 	var findPath = /[^?]*/;
@@ -144,6 +145,7 @@ function initHost(port) {
 			render_404(callback);
 		}
 	}
+	var findRange = /bytes=(\d+)-(\d+)?/, range, from, to;
 	function stat(error, stat, callback) {
 		if(error){
 			console.log(callback.tryFile + ": ERROR: " + error);
@@ -151,22 +153,47 @@ function initHost(port) {
 		else {
 			if(stat.isFile()){
 				var ext = path.extname(callback.tryFile);
-				if (ext && (ext in mime)) {
-					ext = mime[ext];
-					callback.response.writeHead(200, { "Content-Type": ext });
-				}
-				else {
-					callback.response.writeHead(200);
-				}
+				if (ext && (ext in mime)) { ext = mime[ext]; }
+				else { ext = null; }
 
-				fs.createReadStream(callback.tryFile)
-					.on("end", callback.dispose)
-					.pipe(callback.response);
-				
-				console.log(
-					"200 " + (ext ? "[" + ext + "] " : "") +
-					callback.request.url + " : " + callback.filepath
-				);
+				if(callback.request.headers.range){
+					range = callback.request.headers.range.match(findRange);
+					from = +range[1], to = range[2] ? +range[2] : stat.size - 1;
+					
+					callback.response.writeHead(206, {
+						"Content-Range": "bytes "+from+"-"+to+"/"+stat.size,
+						"Accept-Ranges": "bytes",
+						"Content-Length": to - from + 1, "Content-Type": ext
+					});
+					fs.createReadStream(callback.tryFile, { start: from, end: to })
+						.on("end", callback.dispose)
+						.pipe(callback.response);
+
+					console.log(
+						"206 (" + from+" - " + to + ") " + (ext ? "[" + ext + "] " : "") +
+						callback.request.url + " : " + callback.filepath
+					);
+					
+					range = null;
+				}
+				else{
+					if (ext && (ext in mime)) {
+						ext = mime[ext];
+						callback.response.writeHead(200, { "Content-Type": ext });
+					}
+					else {
+						callback.response.writeHead(200);
+					}
+
+					fs.createReadStream(callback.tryFile)
+						.on("end", callback.dispose)
+						.pipe(callback.response);
+
+					console.log(
+						"200 " + (ext ? "[" + ext + "] " : "") +
+						callback.request.url + " : " + callback.filepath
+					);
+				}
 			}
 			else if (stat.isDirectory() && !callback.index) {
 				if(callback.path[callback.path.length-1]!=="/"){
