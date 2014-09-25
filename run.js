@@ -1,16 +1,26 @@
 var fs = require("fs"),
 	net = require("net"), http = require("http"),
 	url = require("url"), path = require("path");
-
-var args = process.argv;
+	var localtunnel = require('localtunnel');
+	var subdomainlt="";
+	var args = process.argv;
 if (args.length < 3) { throw "Must specify folder."; }
+
+if (args.length === 5) 
+{
+	subdomainlt=args[4];
+}
+else
+{
+	subdomainlt="qwerty";
+}
 
 var CreateCallback = require("create-callback");
 
 fs.exists(args[2], function (exists) {
 	if (!exists) { throw "Could not find " + args[2] + "."; }
 	else {
-		if (args.length === 4) {
+		if (args.length >= 4) {
 			var port = parseInt(args[3], 10);
 			if (port.toString() !== args[3]) { throw "Given port must be an integer."; }
 			else {
@@ -57,11 +67,16 @@ function initHost(port) {
 		".png": "image/png",
 		".js": "text/javascript",
 		".css": "text/css",
-		".mp3": "audio/mpeg"
+		".mp3": "audio/mpeg",
+		".mp4":"video/mp4",
+		".mkv":"video/mkv"
 	};
 
 	var findPath = /[^?]*/;
-	
+	localtunnel(port, { subdomain: subdomainlt }, function(err, tunnel) {
+	console.log("inside tunnel creation where port is: "+port);
+    //tunnel.close();      
+    });
 	http.createServer(function(request, response) {
 		console.log(request.url);
 
@@ -84,6 +99,7 @@ function initHost(port) {
 		fs.exists(callback.tryFile, callback.setAction(exists));
 	}).listen(port);
 	
+	
 	function render_404(callback) {
 		console.log("404 " + callback.request.url + " : " + callback.tryFile);
 		callback.response.writeHead(404, { "Content-Type": "text/html" });
@@ -105,11 +121,11 @@ function initHost(port) {
 				render_404(callback);
 			}
 			else {
-				console.log(files);
-				console.log(
+			//	console.log(files);
+				/*console.log(
 					"200 (directory listing) [text/html] " +
 					callback.request.url + " : " + callback.filepath
-				);
+				);*/
 				var response = callback.response;
 				response.writeHead(200, {"Content-type": "text/html" });
 				response.write(
@@ -151,12 +167,16 @@ function initHost(port) {
 			console.log(callback.tryFile + ": ERROR: " + error);
 		}
 		else {
-			if(stat.isFile()){
+			if(stat.isFile()){			
 				var ext = path.extname(callback.tryFile);
 				if (ext && (ext in mime)) { ext = mime[ext]; }
-				else { ext = null; }
-
-				if(callback.request.headers.range){
+				else { ext = null; }	
+				console.log("callback.request.headers.range: "+callback.request.headers.range);
+				if(!callback.request.headers.range)
+				{
+				callback.request.headers.range= "bytes=0-";
+				}
+				if(callback.request.headers.range){				
 					range = callback.request.headers.range.match(findRange);
 					from = +range[1], to = range[2] ? +range[2] : stat.size - 1;
 					
@@ -169,10 +189,11 @@ function initHost(port) {
 						.on("end", callback.dispose)
 						.pipe(callback.response);
 
-					console.log(
+				/*	console.log(
 						"206 (" + from+" - " + to + ") " + (ext ? "[" + ext + "] " : "") +
 						callback.request.url + " : " + callback.filepath
 					);
+					*/
 					
 					range = null;
 				}
@@ -189,10 +210,11 @@ function initHost(port) {
 						.on("end", callback.dispose)
 						.pipe(callback.response);
 
-					console.log(
+				/*	console.log(
 						"200 " + (ext ? "[" + ext + "] " : "") +
 						callback.request.url + " : " + callback.filepath
 					);
+					*/
 				}
 			}
 			else if (stat.isDirectory() && !callback.index) {
