@@ -2,7 +2,7 @@ var fs = require("fs"),
 	net = require("net"), http = require("http"),
 	url = require("url"), path = require("path");
 
-var CreateCallback = require("create-callback");
+var CreateCallback = require("./create-callback.js");
 
 function QuickHost(directory, port, callback) {
 	fs.exists(directory, function (exists) {
