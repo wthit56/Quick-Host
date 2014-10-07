@@ -19,8 +19,8 @@ Here's an example of the module in use:
 ```js
 var QuickHost = require("Quick-Host");
 
-var directory = "directory/path";
-QuickHost(directory, function(error, port) {
+var directory = "directory/path", port = 8000;
+QuickHost(directory, port, function(error, port) {
 	if (error) {
 		console.log("ERROR: " + error.message);
 	}
