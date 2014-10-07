@@ -38,3 +38,8 @@ Icon
 
 # Testing
 test
+
+# NPM
+.npmignore
+npm-debug.log
+package.json

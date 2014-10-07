@@ -1,6 +1,6 @@
 {
   "name": "quick-host",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Quick-Host allows quick and easy local hosting, requiring only the path to an existing directory. It will set up a simple HTTP server using the specified directory as its root.",
   "main": "index.js",
   "directories": {
