@@ -1,1 +1,1 @@
-node run.js %1
+node run.js %1 %2
