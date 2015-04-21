@@ -45,7 +45,7 @@ function sendEvent(callback, event, next) {
 }
 
 function startServer() {
-	var host = new events.EventEmitter();
+	var host = this.state.host = new events.EventEmitter();
 	host.root = this.state.root;
 	host.port = this.state.port;
 	host.close = function() { host.server.close(); };
@@ -63,9 +63,11 @@ function startServer() {
 		sendEvent(callback, "request", tryFileExists);
 	}).on("error", function(error) {
 		host.emit("host-error", error);
-	}).listen(host.port);
-	
-	this.end(host);
+	}).listen(host.port, this.set(listening));
+}
+
+function listening() {
+	this.end(this.state.host);
 }
 
 function response_complete(error, comment) {
