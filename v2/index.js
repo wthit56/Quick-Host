@@ -3,26 +3,18 @@ var wrap_callback = require("./callback.js"),
 	fs = require("fs"), util = require("util"), events = require("events"), http = require("http"), url = require("url"), path = require("path");
 
 var mime = quick_host.mime = {
-	".html": "text/html",
+	".html": "text/html", ".htm": "text/html",
 	".jpeg": "image/jpeg",
 	".jpg": "image/jpeg",
 	".png": "image/png",
 	".js": "text/javascript",
 	".css": "text/css",
-	".mp3": "audio/mpeg"
+	".mp3": "audio/mpeg",
+	".ico": "image/x-icon"
 };
 
 function quick_host(root, port, callback) {
-	/*
-	if (!callback) {
-		callback = function(error, host) {
-			if (error) { log("ERROR: " + error); }
-			else { log(host.port); }
-		};
-	}
-	*/
-	
-	if ((typeof root !== "string") || !root) {
+	if (!root || (typeof root !== "string")) {
 		callback("Root string not provided. " + util.inspect(root));
 	}
 	else {
@@ -70,7 +62,7 @@ function startServer() {
 		
 		sendEvent(callback, "request", tryFileExists);
 	}).on("error", function(error) {
-		console.log("host error");
+		host.emit("host-error", error);
 	}).listen(host.port);
 	
 	this.end(host);
@@ -88,7 +80,7 @@ function tryFileExists() {
 			fs.stat(this.state.response.path, this.set(checkStat));
 		}
 		else {
-			sendEvent(this, "request-file-missing", render404);
+			sendEvent(this, "request-file-missing", send404);
 		}
 	} {
 		function checkStat(error, stat) {
@@ -100,10 +92,17 @@ function tryFileExists() {
 			}
 		} {
 			function sendFile() {
+				var ext = path.extname(this.state.response.path);
+				if (ext in quick_host.mime) {
+					this.state.response.writeHead(200, { "Content-Type": quick_host.mime[ext] });
+				}
+				else {
+					this.state.response.writeHead(200);
+				}
+				
 				var callback = this;
-				this.state.response.writeHead(200);
 				fs.createReadStream(this.state.response.path)
-					.on("end", function() { callback.end("\\" + path.relative(callback.state.host.root, callback.state.response.path)); })
+					.on("end", function() { callback.end(); })
 					.pipe(this.state.response);
 			}
 			function tryIndexExists() {
@@ -118,10 +117,15 @@ function tryFileExists() {
 				function checkIndexExists(exists) {
 					if (exists) {
 						this.state.response.path = this.state.response.indexPath;
-						delete this.state.response.indexPath;
+					}
+					
+					delete this.state.response.indexPath;
+					
+					if (exists) {
 						sendEvent(this, "request-directory-index-found", sendFile);
 					}
 					else {
+						delete this.state.response.indexPath;
 						sendEvent(this, "request-directory-index-missing", renderIndex);
 					}
 				} {
@@ -155,15 +159,23 @@ function tryFileExists() {
 			}
 		}
 
-		function render404() {
-			this.state.response.writeHead(404);
-			this.state.response.end("<h1>404</h1>");
+		function send404() {
+			this.state.response.path = null;
+			var ext = path.extname(this.state.request.path), response = this.state.response, mime;
+			if ((ext === "") || (ext === ".html") || (ext === ".htm") || !(ext in quick_host.mime)) {
+				response.writeHead(404, { "Content-Type": mime });
+				response.end(quick_host["404"]);
+				this.end("rendered 404");
+			}
+			else {
+				response.writeHead(404)
+				response.end();
+				this.end();
+			}
 		}
 	}
 }
-
-function log() { return quick_host.log.apply(this, arguments); }
-quick_host.log = function() { console.log.apply(console, arguments); };
+Object.defineProperty(quick_host, "404", { value: "<h1>404 - Not Found</h1>" });
 
 module.exports = quick_host;
 
