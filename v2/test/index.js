@@ -1,5 +1,8 @@
 console.log(require("test")(function() {
 var testRequestOverride = require(process.cwd() + "/test-request-override.js");
+testRequestOverride.throwError = throwError;
+testRequestOverride = testRequestOverride.run;
+
 var quick_host = require(process.cwd() + "/../index.js"), http = require("http");
 
 ((typeof quick_host !== "undefined") && (quick_host instanceof Function));
@@ -84,7 +87,6 @@ var quick_host = require(process.cwd() + "/../index.js"), http = require("http")
 		testRequestOverride(null, "/non-existent", null, { statusCode: 404, data: quick_host["404"], comment: "rendered 404" }, function(passed) {
 			passed; /// no extension, 404 rendered
 		});
-		//*
 		testRequestOverride(null, "/non-existent", null, { statusCode: 404, data: quick_host["404"], comment: "rendered 404" }, function(passed) {
 			passed; /// no extension, 404 rendered
 		});
@@ -99,4 +101,5 @@ var quick_host = require(process.cwd() + "/../index.js"), http = require("http")
 		});
 	}
 }
+
 }, __dirname, __filename).renderFull);
