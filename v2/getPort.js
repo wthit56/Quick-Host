@@ -1,5 +1,5 @@
 var isPortOpen = require("./isPortOpen.js"),
-	wrap_callback = require("./callback.js");
+	wrap_callback = require("wrap-callback");
 
 var getPort = module.exports = function(preferred, from, callback) {
 	if (arguments.length === 2) {

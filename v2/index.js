@@ -1,4 +1,4 @@
-var wrap_callback = require("./callback.js"),
+var wrap_callback = require("wrap-callback"),
 	get_port = require("./getPort.js"),
 	fs = require("fs"), util = require("util"), events = require("events"), http = require("http"), url = require("url"), path = require("path");
 
@@ -21,6 +21,7 @@ function quick_host(root, port, callback) {
 		fs.exists(root, wrap_callback(callback, { root: root, port: port }).set(rootExists));
 	}
 }
+quick_host.version = 2;
 
 function rootExists(exists) {
 	if (exists) {
@@ -142,7 +143,7 @@ function tryFileExists() {
 							response.write(
 								'<h1>Index of ' + this.state.request.path + '</h1>\n' +
 								'<ul>\n' + 
-								'<li><a href="..">.. (up one level)</a></li>\n'
+								(this.state.request.url !== "/" ? '<li><a href="..">.. (up one level)</a></li>\n' : '')
 							);
 							for (var i = 0, l = files.length; i < l; i++) {
 								response.write('<li><a href="' + files[i] + '">' + files[i] + '</a></li>\n');
