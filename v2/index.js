@@ -97,7 +97,7 @@ function tryFileExists() {
 			function sendFile() {
 				var ext = path.extname(this.state.response.path);
 				if (ext in quick_host.mime) {
-					this.state.response.writeHead(200, { "Content-Type": quick_host.mime[ext] });
+					this.state.response.writeHead(200, { "Content-Type": this.state.response.mime = quick_host.mime[ext] });
 				}
 				else {
 					this.state.response.writeHead(200);
@@ -139,7 +139,7 @@ function tryFileExists() {
 						if (error) { this.error(error); }
 						else {
 							var response = this.state.response;
-							response.writeHead(200, { "Content-Type": quick_host.mime[".html"] });
+							response.writeHead(200, { "Content-Type": response.mime = quick_host.mime[".html"] });
 							response.write(
 								'<h1>Index of ' + this.state.request.path + '</h1>\n' +
 								'<ul>\n' + 
@@ -166,7 +166,7 @@ function tryFileExists() {
 			this.state.response.path = null;
 			var ext = path.extname(this.state.request.path), response = this.state.response, mime;
 			if ((ext === "") || (ext === ".html") || (ext === ".htm") || !(ext in quick_host.mime)) {
-				response.writeHead(404, { "Content-Type": mime });
+				response.writeHead(404, { "Content-Type": response.mime = mime });
 				response.end(quick_host["404"]);
 				this.end("rendered 404");
 			}
