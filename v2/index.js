@@ -72,7 +72,12 @@ function listening() {
 }
 
 function response_complete(error, comment) {
-	this.state.host.emit("request-complete", this.state.request, this.state.response, comment);
+	if (error) {
+		throw error;
+	}
+	else {
+		this.state.host.emit("request-complete", this.state.request, this.state.response, comment);
+	}
 }
 
 function tryFileExists() {
