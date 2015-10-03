@@ -1,225 +1,193 @@
-var fs = require("fs"),
-	net = require("net"), http = require("http"),
-	url = require("url"), path = require("path");
+var wrap_callback = require("wrap-callback"),
+	get_port = require("./getPort.js"),
+	fs = require("fs"), util = require("util"), events = require("events"), http = require("http"), url = require("url"), path = require("path");
 
-var CreateCallback = require("./create-callback.js");
-
-function QuickHost(directory, port, callback) {
-	fs.exists(directory, function (exists) {
-		if (!exists) { returnError(new Error("Could not find " + directory + "."), callback); }
-		else { // exists
-			if(port != null) {
-				port = parseInt(port, 10);
-				if (port.toString() != port) { returnError(new Error("Given port must be an integer."), callback); }
-				else {
-					checkPortOpen(port, function (open) {
-						if (!open) { returnError(new Error("Given port must be open."), callback); }
-						else { initHost(directory, port, callback); }
-					});
-				}
-			}
-			else {
-				useRandomPort(directory, callback);
-			}
-		}
-	});
-};
-
-module.exports = QuickHost;
-
-function returnError(error, callback) {
-	if (callback instanceof Function) {
-		callback(error);
-	}
-	else {
-		throw error;
-	}
-}
-
-function useRandomPort(directory, callback) {
-	var port;
-	function isOpen(open) {
-		if (open) { initHost(directory, port, callback); }
-		else {
-			checkPortOpen(port = 80 + (Math.random() * 1000) | 0, isOpen);
-		}
-	}
-	isOpen(false);
-}
-
-function checkPortOpen(port, callback) {
-	var server = net.createServer().listen(port, function (err) {
-		server.once("close", function () {
-			callback(true);
-		}).close();
-	}).on("error", function (err) {
-		callback(false);
-	});
-}
-
-var mime = QuickHost.mime = {
-	".html": "text/html",
+var mime = quick_host.mime = {
+	".html": "text/html", ".htm": "text/html",
 	".jpeg": "image/jpeg",
 	".jpg": "image/jpeg",
 	".png": "image/png",
 	".js": "text/javascript",
 	".css": "text/css",
-	".mp3": "audio/mpeg"
+	".mp3": "audio/mpeg",
+	".ico": "image/x-icon"
 };
 
-function initHost(directory, port, callback) {
-	var findPath = /[^?]*/;
-	
-	http.createServer(function(request, response) {
-		console.log(request.url);
-
-		var callback = CreateCallback();
-		
-		callback.path = url.parse(request.url).pathname;
-		callback.filepath = path.join(path.join(directory, decodeURI(callback.path)));
-		callback.tryFile = callback.filepath;
-		callback.index = false;
-		
-		callback.request = request;
-		callback.response = response;
-		callback.onDispose = function(callback) {
-			delete callback.index;
-			delete callback.filepath;
-			delete callback.request;
-			delete callback.response;
-		};
-
-		fs.exists(callback.tryFile, callback.setAction(exists));
-	}).listen(port);
-	
-	callback(null, port);
-}
-
-function render_404(callback) {
-	console.log("404 " + callback.request.url + " : " + callback.tryFile);
-	callback.response.writeHead(404, { "Content-Type": "text/html" });
-	callback.response.write("<title>404</title><h1>404: Not Found</h1>")
-	callback.response.end();
-	callback.dispose();
-}
-
-var render_dir = (function() {
-	function render_dir(callback){
-		fs.readdir(callback.filepath, callback.setAction(readdir));
+function quick_host(root, port, callback) {
+	if (!root || (typeof root !== "string")) {
+		callback("Root string not provided. " + util.inspect(root));
 	}
+	else {
+		fs.exists(root, wrap_callback(callback, { root: root, port: port }).set(rootExists));
+	}
+}
+quick_host.version = 2;
 
-	function readdir(error, files, callback) {
-		if (error) {
-			console.log(callback.tryFile + ": ERROR: " + error);
-			render_404(callback);
+function rootExists(exists) {
+	if (exists) {
+		get_port(this.state.port, this.set(handlePort));
+	}
+	else {
+		this.error("Root does not exist. " + util.inspect(this.state.root));
+	}
+}
+
+function handlePort(error, port) {
+	if (error) { this.error(error); }
+	else {
+		this.state.port = port;
+		startServer.call(this);
+	}
+}
+
+function sendEvent(callback, event, next) {
+	callback.set(next);
+	callback.state.host.emit(event, callback.state.request, callback.state.response, callback.state.resume, callback.state.cancel) || callback();
+}
+
+function startServer() {
+	var host = this.state.host = new events.EventEmitter();
+	host.root = this.state.root;
+	host.port = this.state.port;
+	host.close = function() { host.server.close(); };
+	
+	var server = host.server = http.createServer(function(request, response) {
+		var callback = wrap_callback(response_complete, {
+			host: host,
+			request: request, response: response,
+			resume: function() { callback(); },
+			cancel: function() { callback.end.apply(callback, arguments); }
+		});
+		request.path = decodeURI(url.parse(request.url).pathname);
+		response.path = path.join(host.root, request.path);
+		
+		sendEvent(callback, "request", tryFileExists);
+	}).on("error", function(error) {
+		host.emit("host-error", error);
+	}).listen(host.port, this.set(listening));
+}
+
+function listening() {
+	this.end(this.state.host);
+}
+
+function response_complete(error, comment) {
+	if (error) {
+		throw error; // add "request-error" event?
+	}
+	else {
+		this.state.host.emit("request-complete", this.state.request, this.state.response, comment);
+	}
+}
+
+function tryFileExists() {
+	fs.exists(this.state.response.path, this.set(checkFileExists));
+} {
+	function checkFileExists(exists) {
+		if (exists) {
+			fs.stat(this.state.response.path, this.set(checkStat));
 		}
 		else {
-			console.log(
-				"200 (directory listing) [text/html] " +
-				callback.request.url + " : " + callback.filepath
-			);
-
-			var response = callback.response;
-			response.writeHead(200, {"Content-type": "text/html" });
-			response.write(
-				"<title>" + callback.path + "</title>" +
-				"<h1>"+callback.path+"</h1>"
-			);
-			response.write(
-				(files.length>0)
-					? "<ul>"+files.map(linkFiles, callback).join("")+"</ul>"
-					: "<p>No files found</p>"
-			);
-			response.end();
-
-			callback.dispose();
+			sendEvent(this, "request-file-missing", send404);
 		}
-	}
-	function linkFiles(file) {
-		return "<li><a href=\""+path.join(this.path,file)+"\">"+file+"</a></li>";
-	}
-
-	return render_dir;
-})();
-
-function exists(exists, callback) {
-	if (exists) {
-		fs.stat(callback.tryFile, callback.setAction(stat));
-	}
-	else if (callback.index) {
-		render_dir(callback);
-	}
-	else {
-		console.log("404 " + callback.request.url + " : " + callback.filepath);
-		render_404(callback);
-	}
-}
-var findRange = /bytes=(\d+)-(\d+)?/, range, from, to;
-function stat(error, stat, callback) {
-	if(error){
-		console.log(callback.tryFile + ": ERROR: " + error);
-	}
-	else {
-		if(stat.isFile()){
-			var ext = path.extname(callback.tryFile);
-			if (ext && (ext in mime)) { ext = mime[ext]; }
-			else { ext = null; }
-
-			if(callback.request.headers.range){
-				range = callback.request.headers.range.match(findRange);
-				from = +range[1], to = range[2] ? +range[2] : stat.size - 1;
-
-				callback.response.writeHead(206, {
-					"Content-Range": "bytes "+from+"-"+to+"/"+stat.size,
-					"Accept-Ranges": "bytes",
-					"Content-Length": to - from + 1, "Content-Type": ext
-				});
-				fs.createReadStream(callback.tryFile, { start: from, end: to })
-					.on("end", callback.dispose)
-					.pipe(callback.response);
-
-				console.log(
-					"206 (" + from+" - " + to + ") " + (ext ? "[" + ext + "] " : "") +
-					callback.request.url + " : " + callback.filepath
-				);
-
-				range = null;
+	} {
+		function checkStat(error, stat) {
+			if (stat.isFile()) {
+				sendEvent(this, "request-file-found", sendFile);
 			}
-			else {
-				if (ext) {
-					callback.response.writeHead(200, { "Content-Type": ext });
+			else if (stat.isDirectory()) {
+				sendEvent(this, "request-directory-found", tryIndexExists);
+			}
+		} {
+			function sendFile() {
+				var ext = path.extname(this.state.response.path);
+				if (ext in quick_host.mime) {
+					this.state.response.writeHead(200, { "Content-Type": this.state.response.mime = quick_host.mime[ext] });
 				}
 				else {
-					callback.response.writeHead(200);
+					this.state.response.writeHead(200);
 				}
-
-				console.log(
-					"200 " + (ext ? "[" + ext + "] " : "") +
-					callback.request.url + " : " + callback.filepath
-				);
-
-				fs.createReadStream(callback.tryFile)
-					.on("end", callback.dispose)
-					.pipe(callback.response);
+				
+				var callback = this;
+				fs.createReadStream(this.state.response.path)
+					.on("end", function() { callback.end(); })
+					.pipe(this.state.response);
+			}
+			function tryIndexExists() {
+				if (this.state.request.path[this.state.request.path.length - 1] === "/") {
+					this.state.response.indexPath = path.join(this.state.response.path, "index.html");
+					// add event?
+					fs.exists(this.state.response.indexPath, this.set(checkIndexExists));
+				}
+				else {
+					sendEvent(this, "request-directory-redirect", directoryRedirect);
+				}
+			} {
+				function checkIndexExists(exists) {
+					if (exists) { // weird ordering?
+						this.state.response.path = this.state.response.indexPath;
+					}
+					
+					delete this.state.response.indexPath;
+					
+					if (exists) {
+						// check to make sure it's a file?
+						sendEvent(this, "request-directory-index-found", sendFile);
+					}
+					else {
+						delete this.state.response.indexPath; // superfluous?
+						sendEvent(this, "request-directory-index-missing", renderIndex);
+					}
+				} {
+					function renderIndex() {
+						fs.readdir(this.state.response.path, this.set(readDirectory));
+					}
+					function readDirectory(error, files) {
+						if (error) { this.error(error); }
+						else {
+							var response = this.state.response;
+							response.writeHead(200, { "Content-Type": response.mime = quick_host.mime[".html"] });
+							response.write(
+								'<h1>Index of ' + this.state.request.path + '</h1>\n' +
+								'<ul>\n' + 
+								(this.state.request.url !== "/" ? '<li><a href="..">.. (up one level)</a></li>\n' : '')
+							);
+							for (var i = 0, l = files.length; i < l; i++) {
+								response.write('<li><a href="' + files[i] + '">' + files[i] + '</a></li>\n');
+							}
+							response.end('</ul>');
+							this.end("rendered index");
+						}
+					}
+				}
+				
+				function directoryRedirect() {
+					this.state.response.writeHead(301, { location: this.state.request.url + "/" });
+					this.state.response.end();
+					this.end("redirected to " + this.state.request.url + "/");
+				}
 			}
 		}
-		else if (stat.isDirectory() && !callback.index) {
-			if(callback.path[callback.path.length-1]!=="/"){
-				console.log("301 premanent redirect to " + callback.request.url + "/");
-				callback.response.writeHead(301, {location:callback.request.url+"/"});
-				callback.response.end();
-				callback.dispose();
+
+		function send404() {
+			this.state.response.path = null;
+			var ext = path.extname(this.state.request.path), response = this.state.response, mime;
+			if ((ext === "") || (ext === ".html") || (ext === ".htm") || !(ext in quick_host.mime)) {
+				response.writeHead(404, { "Content-Type": response.mime = mime });
+				response.end(quick_host["404"]);
+				this.end("rendered 404");
 			}
 			else {
-				callback.index = true;
-				fs.exists(
-					callback.tryFile = path.join(callback.filepath, "index.html"),
-					callback.setAction(exists)
-				);
+				response.writeHead(404)
+				response.end();
+				this.end();
 			}
-		}
-		else {
-			render_404(callback);
 		}
 	}
 }
+Object.defineProperty(quick_host, "404", { value: "<h1>404 - Not Found</h1>" });
+
+module.exports = quick_host;
+
+
+
