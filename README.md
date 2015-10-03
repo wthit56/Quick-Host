@@ -23,6 +23,8 @@ Requiring the module (`...\run.js`, or simply `Quick-Host`) will give you the `q
 
 `Callback` is a function that accepts two arguments: `error`, a string message describing any error encountered while trying to set up the host, and `host`, the created quick-host object (more details below).
 
+> NOTE: This is a breaking change. Version 1 gave `error` and `port` arguments. You can fix this by adding `var port = host.port;` to the top of your `callback` function.
+
 Your server-side code can end there, if you wish. You can just call this function and walk away. Any files will requested will be sent to the response, and any missing files will produce a 404 error.
 
 If you want to further develop the back-end of your project you can, again, opt in to pick up from any point in the pipeline and take over, on a request-by-request basis.
